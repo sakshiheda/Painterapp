@@ -1,0 +1,29 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+.expo/
+.expo-shared/
+web-build/
+
+# Runtime data — never commit user uploads or DB
+api/uploads/
+api/data/
+*.sqlite
+*.sqlite-journal

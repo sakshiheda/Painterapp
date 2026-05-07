@@ -1,0 +1,31 @@
+{
+  "name": "painterapp-api",
+  "version": "1.0.0",
+  "description": "REST API for capturing geo-tagged photos and computing real-world dimensions / area from a user-selected polygon.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "smoke": "node test/e2e-smoke.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "exifr": "^7.1.3",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.1",
+    "nanoid": "^3.3.7",
+    "sharp": "^0.33.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

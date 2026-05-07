@@ -1,0 +1,38 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Push this repo to GitHub, then in Render dashboard:
+#   New → Blueprint → connect repo → Apply
+# Render will create the service AND the persistent disk automatically.
+
+services:
+  - type: web
+    name: painterapp-api
+    runtime: docker
+    plan: free                           # upgrade to "starter" ($7/mo) for always-on + 1 GB disk
+    region: oregon                       # change to frankfurt / singapore / ohio if you prefer
+    rootDir: api
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: API_KEYS
+        generateValue: true              # Render auto-generates a secret on first deploy
+      - key: CORS_ORIGINS
+        value: "*"                       # tighten this once you know your client origins
+      - key: MAX_UPLOAD_MB
+        value: "15"
+      - key: RATE_LIMIT_WINDOW_MIN
+        value: "15"
+      - key: RATE_LIMIT_MAX
+        value: "300"
+      - key: UPLOAD_DIR
+        value: /app/uploads
+      - key: DATA_DIR
+        value: /app/data
+    disk:
+      name: painterapp-data
+      mountPath: /app
+      sizeGB: 1

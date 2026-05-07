@@ -1,0 +1,46 @@
+# fly.toml — Fly.io app definition for PainterApp API
+# Deploy:
+#   1. iwr https://fly.io/install.ps1 -useb | iex
+#   2. fly auth signup    (or: fly auth login)
+#   3. cd api
+#   4. fly launch --copy-config --no-deploy        # creates app + 1 GB volume
+#   5. fly secrets set API_KEYS="$(openssl rand -hex 24)"
+#   6. fly volumes create painterapp_data --region iad --size 1
+#   7. fly deploy
+
+app = "painterapp-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "4000"
+  CORS_ORIGINS = "*"
+  MAX_UPLOAD_MB = "15"
+  UPLOAD_DIR = "/app/uploads"
+  DATA_DIR = "/app/data"
+
+[[mounts]]
+  source = "painterapp_data"
+  destination = "/app"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0       # set to 1 if you want zero cold-start delay
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

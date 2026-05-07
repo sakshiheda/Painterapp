@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "PainterApp",
+    "slug": "painterapp-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "PainterApp needs camera access to capture photos of areas you want to measure.",
+        "NSLocationWhenInUseUsageDescription": "PainterApp tags each photo with the GPS coordinates where it was captured.",
+        "NSPhotoLibraryAddUsageDescription": "PainterApp may save measured photos to your library."
+      }
+    },
+    "android": {
+      "package": "com.painterapp.mobile",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PainterApp to access your camera to capture areas to measure."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow PainterApp to tag photos with the GPS coordinates where they were taken."
+        }
+      ]
+    ]
+  }
+}
