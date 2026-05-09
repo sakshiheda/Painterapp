@@ -9,11 +9,13 @@ const db = require('../db');
 const { upload, newId } = require('../middleware/upload');
 const { readImageMetadata, deleteIfExists } = require('../services/image');
 const { detectCalibrationMarker } = require('../services/marker');
+const { detectReferences } = require('../services/referenceDetector');
 const {
   intrinsicsFromExif, lensRiskFromFov, undistortPoints, undistortPoint,
   ZERO_DISTORTION,
 } = require('../services/intrinsics');
 const { validatePolygon } = require('../services/polygonValidation');
+const { tierContract } = require('../services/referenceCatalog');
 const geometry = require('../services/geometry');
 const config = require('../config');
 
@@ -79,6 +81,28 @@ function gpsConfidence(c) {
   return 'red';
 }
 
+// Phase 5: map a capture's calibration source to its accuracy tier.
+//   S = on-device depth / LiDAR (3D points already in metres)
+//   A = AR plane raycast        (3D points already in metres)
+//   B = auto-detected reference object (ML)
+//   C = explicitly placed marker (QR) or manually drawn rectangle
+// The tier determines which engineering contract /measure enforces.
+function calibrationTier(c) {
+  if (!c) return null;
+  const method = c.calibrationMethod;
+  // 3D scale sources stamp these methods on the capture at upload time.
+  if (method === 'depth' || method === 'lidar') return 'S';
+  if (method === 'ar-plane' || method === 'arkit' || method === 'arcore') return 'A';
+  if (method === 'auto-ref' || method === 'ml-reference') return 'B';
+  // Manual rectangle and QR are both Tier C — physically placed / drawn,
+  // sub-mm corner accuracy when done correctly.
+  if (method === 'qr-auto' || method === 'qr' || method === 'rect') return 'C';
+  // Legacy line-scale (no homography) — treat as Tier C with caveats.
+  if (Array.isArray(c.homography) && c.homography.length === 9) return 'C';
+  if (c.pxPerCm) return 'C';
+  return null;
+}
+
 function captureToJson(c) {
   if (!c) return null;
   let calibration = null;
@@ -91,6 +115,10 @@ function captureToJson(c) {
       heightCm: c.calibrationHeightCm ?? null,
       markerSidePx: c.markerSidePx ?? null,
       markerPayload: c.markerPayload ?? null,
+      // Phase 7: when calibration came from auto-detected reference object.
+      referenceId: c.referenceId ?? null,
+      referenceConfidence: c.referenceConfidence ?? null,
+      referenceDetector: c.referenceDetector ?? null,
     };
   } else if (c.pxPerCm) {
     calibration = {
@@ -140,6 +168,14 @@ function captureToJson(c) {
     createdAt: c.createdAt,
     calibration,
     lens,
+    // Phase 5: client capability snapshot recorded at upload time.
+    client: (c.clientTier || c.clientPlatform || c.clientDeviceModel)
+      ? {
+          tier: c.clientTier ?? null,
+          platform: c.clientPlatform ?? null,
+          deviceModel: c.clientDeviceModel ?? null,
+        }
+      : null,
     imageUrl: `/api/v1/captures/${c.id}/image`,
   };
 }
@@ -243,6 +279,15 @@ router.post('/captures', upload.single('image'), async (req, res, next) => {
       gpsFixCount: gpsFixCountStored,
       gpsTimestamp: gpsTimestampStored,
       deviceInfo: req.body.deviceInfo ? String(req.body.deviceInfo) : null,
+      // Phase 5: client-side capability declaration. The mobile app probes
+      // its own AR / depth support at launch and tells us which tier it
+      // can deliver. This does NOT decide tier on its own — server still
+      // derives the actual tier from the calibration source — but it lets
+      // us record device fleet capability for analytics + degrade safely
+      // when we have no scale source at all.
+      clientTier: req.body.clientTier ? String(req.body.clientTier).slice(0, 2) : null,
+      clientPlatform: req.body.clientPlatform ? String(req.body.clientPlatform).slice(0, 16) : null,
+      clientDeviceModel: req.body.clientDeviceModel ? String(req.body.clientDeviceModel).slice(0, 64) : null,
       takenAt,
       // Lens / camera profile
       intrinsics,
@@ -305,6 +350,69 @@ router.post('/captures', upload.single('image'), async (req, res, next) => {
       }
     }
 
+    // ----- Tier B fallback: auto-detect a reference object -------------
+    // If the QR detector did NOT find a marker, try to find a paper sheet
+    // (A4 / Letter) or another known reference in the photo. This lets the
+    // user measure without printing or placing anything special — a credit
+    // card or a sheet of A4 next to the target is enough.
+    let autoRefInfo = null;
+    if (!markerInfo.found) {
+      try {
+        const det = await detectReferences(filePath);
+        autoRefInfo = det;
+        if (det.found) {
+          const m = det.match;
+          // Orient corners: catalog gives widthMm × heightMm in canonical
+          // landscape orientation, but our detected `corners.tl→tr` may be
+          // either short or long side. Use observed side lengths to decide.
+          const sideTopPx = Math.hypot(
+            m.corners.tr.x - m.corners.tl.x,
+            m.corners.tr.y - m.corners.tl.y
+          );
+          const sideLeftPx = Math.hypot(
+            m.corners.bl.x - m.corners.tl.x,
+            m.corners.bl.y - m.corners.tl.y
+          );
+          const longMm = Math.max(m.widthMm, m.heightMm);
+          const shortMm = Math.min(m.widthMm, m.heightMm);
+          const widthCm  = (sideTopPx >= sideLeftPx ? longMm : shortMm) / 10;
+          const heightCm = (sideTopPx >= sideLeftPx ? shortMm : longMm) / 10;
+          try {
+            const cornersUndist = intrinsics
+              ? {
+                  tl: undistortPoint(m.corners.tl, intrinsics, distortion),
+                  tr: undistortPoint(m.corners.tr, intrinsics, distortion),
+                  br: undistortPoint(m.corners.br, intrinsics, distortion),
+                  bl: undistortPoint(m.corners.bl, intrinsics, distortion),
+                }
+              : m.corners;
+            const H = geometry.homographyFromRectangle({
+              tl: cornersUndist.tl,
+              tr: cornersUndist.tr,
+              br: cornersUndist.br,
+              bl: cornersUndist.bl,
+              widthCm, heightCm,
+            });
+            baseRow.homography = H;
+            baseRow.calibrationCorners = m.corners;
+            baseRow.calibrationCornersUndistorted = cornersUndist;
+            baseRow.calibrationWidthCm = widthCm;
+            baseRow.calibrationHeightCm = heightCm;
+            baseRow.calibrationMethod = 'auto-ref';
+            baseRow.referenceId = m.referenceId;
+            baseRow.referenceConfidence = m.confidence;
+            baseRow.referenceDetector = m.detectorVersion;
+          } catch (_) {
+            // Degenerate corners — keep det info for diagnostics but do
+            // not commit a bad homography.
+            autoRefInfo = { ...det, found: false, reason: 'homography_failed' };
+          }
+        }
+      } catch (e) {
+        autoRefInfo = { found: false, reason: 'detector_error', error: e.message };
+      }
+    }
+
     const stored = db.captures.insert(baseRow);
 
     res.status(201).json({
@@ -318,6 +426,20 @@ router.post('/captures', upload.single('image'), async (req, res, next) => {
             payload: markerInfo.payload,
           }
         : { found: false, reason: markerInfo.reason },
+      autoReference: autoRefInfo && autoRefInfo.found
+        ? {
+            found: true,
+            referenceId: autoRefInfo.match.referenceId,
+            label: autoRefInfo.match.label,
+            confidence: autoRefInfo.match.confidence,
+            corners: autoRefInfo.match.corners,
+            widthMm: autoRefInfo.match.widthMm,
+            heightMm: autoRefInfo.match.heightMm,
+            detector: autoRefInfo.match.detectorVersion,
+          }
+        : autoRefInfo
+          ? { found: false, reason: autoRefInfo.reason || 'no_match' }
+          : { found: false, reason: 'not_attempted' },
     });
   } catch (err) {
     deleteIfExists(filePath);
@@ -697,6 +819,10 @@ router.post('/captures/:id/measure', (req, res) => {
   let confidence = 'green';
   if (gpsConf === 'amber' || lensRisk === 'amber') confidence = 'amber';
 
+  // Phase 5: identify the scale source tier and look up its accuracy contract.
+  const tier = calibrationTier(c);
+  const contract = tier ? tierContract(tier) : null;
+
   // ----- Persist -----
   const id = newId();
   // Strip the (potentially large) intermediate polygonCm out of the persisted
@@ -731,6 +857,8 @@ router.post('/captures/:id/measure', (req, res) => {
       polygon,
       ...result,
       gates,
+      tier,
+      tierContract: contract,
       validation: {
         firstFailure: null,
         mc: {
