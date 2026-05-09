@@ -8,6 +8,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../context/SettingsContext';
 import { createApiClient } from '../services/api';
+import { probeCapabilities, tierLabel } from '../services/capabilities';
 
 // Server-side gate is at 15 m. We warn earlier (amber at 30 m) and refuse to
 // shoot below 60 m so users can't burn time with a useless capture.
@@ -88,6 +89,12 @@ export default function CaptureScreen({ navigation }) {
   const [gpsProgress, setGpsProgress] = useState(null); // "1/3"
   const [busy, setBusy] = useState(false);
   const { settings } = useSettings();
+  // Phase 5: probe device capability once. Reports the highest tier
+  // (S=depth, A=AR, B=ML auto-ref, C=QR) this phone can deliver.
+  const capabilitiesRef = useRef(null);
+  if (!capabilitiesRef.current) {
+    try { capabilitiesRef.current = probeCapabilities(); } catch (_) { capabilitiesRef.current = null; }
+  }
 
   async function refreshGps() {
     setGpsBusy(true);
@@ -131,19 +138,9 @@ export default function CaptureScreen({ navigation }) {
       setGpsProgress(null);
     }
 
-    // Hard refusal — don't waste an upload on a clearly useless GPS fix.
-    if (locPerm === 'granted') {
-      const tier = gpsTier(liveGps?.accuracyM, liveGps?.mocked);
-      if (!liveGps || tier === 'red') {
-        const reason = liveGps?.mocked
-          ? 'GPS is reporting a mocked / fake location. Disable mock locations in developer options.'
-          : liveGps?.accuracyM == null
-            ? 'No GPS fix available. Move outdoors or wait for a fix before capturing.'
-            : `GPS accuracy ±${Math.round(liveGps.accuracyM)} m is too poor (max ±${GPS_HARD_M} m). Move outdoors and try again.`;
-        Alert.alert('GPS quality too low', reason);
-        return;
-      }
-    }
+    // Client-side gate removed — the server enforces accuracy / mocked / etc.
+    // and returns HTTP 422 with a typed reason on /measure. We let the upload
+    // proceed so the user sees the real server response instead of a blocked button.
 
     setBusy(true);
     try {
@@ -161,6 +158,7 @@ export default function CaptureScreen({ navigation }) {
       );
 
       const client = createApiClient(settings);
+      const caps = capabilitiesRef.current;
       const { capture, marker } = await client.uploadCapture({
         photoUri: resized.uri,
         latitude: liveGps?.latitude,
@@ -174,6 +172,9 @@ export default function CaptureScreen({ navigation }) {
         gpsFixCount: liveGps?.fixCount,
         takenAt: new Date().toISOString(),
         deviceInfo: `${Platform.OS} ${Platform.Version}`,
+        clientTier: caps?.tier ?? null,
+        clientPlatform: caps?.platform ?? Platform.OS,
+        clientDeviceModel: caps?.deviceModel ?? null,
       });
 
       // QR auto-detected → calibration is already done server-side.
@@ -210,7 +211,9 @@ export default function CaptureScreen({ navigation }) {
   const coordsLabel = gps
     ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`
     : locPerm === 'granted' ? (gpsBusy ? `acquiring ${gpsProgress || ''}` : 'no fix') : 'permission denied';
-  const shootDisabled = busy || gpsBusy || (locPerm === 'granted' && tier === 'red');
+  // Button only blocked while busy uploading or actively acquiring GPS.
+  // GPS quality is enforced by the server on /measure (HTTP 422 with typed reason).
+  const shootDisabled = busy || gpsBusy;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -244,6 +247,12 @@ export default function CaptureScreen({ navigation }) {
           Hold steady. The app takes {FIX_COUNT} GPS fixes and uses the median for robustness.
           Server requires accuracy ≤ {GPS_GREEN_M} m for an accepted measurement.
         </Text>
+        {capabilitiesRef.current ? (
+          <Text style={styles.tip}>
+            Scale source: <Text style={{ fontWeight: '700' }}>{tierLabel(capabilitiesRef.current.tier)}</Text>
+            {capabilitiesRef.current.deviceModel ? ` · ${capabilitiesRef.current.deviceModel}` : ''}
+          </Text>
+        ) : null}
         <TouchableOpacity
           style={[styles.shoot, shootDisabled && { opacity: 0.5 }]}
           onPress={onShoot}

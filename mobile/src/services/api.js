@@ -52,6 +52,11 @@ export function createApiClient({ apiBaseUrl, apiKey }) {
     gpsFixCount,
     takenAt,
     deviceInfo,
+    // Phase 5 — client capability snapshot. The server uses these to
+    // pick / record the measurement tier (S/A/B/C).
+    clientTier,
+    clientPlatform,
+    clientDeviceModel,
   }) {
     const form = new FormData();
     // React Native FormData file shape
@@ -74,6 +79,9 @@ export function createApiClient({ apiBaseUrl, apiKey }) {
     if (gpsFixCount != null) form.append('gpsFixCount', String(gpsFixCount));
     if (takenAt) form.append('takenAt', takenAt);
     if (deviceInfo) form.append('deviceInfo', deviceInfo);
+    if (clientTier) form.append('clientTier', clientTier);
+    if (clientPlatform) form.append('clientPlatform', clientPlatform);
+    if (clientDeviceModel) form.append('clientDeviceModel', clientDeviceModel);
 
     return request('/api/v1/captures', { method: 'POST', body: form });
   }

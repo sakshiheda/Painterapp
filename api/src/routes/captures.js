@@ -14,6 +14,7 @@ const {
   ZERO_DISTORTION,
 } = require('../services/intrinsics');
 const { validatePolygon } = require('../services/polygonValidation');
+const { tierContract } = require('../services/referenceCatalog');
 const geometry = require('../services/geometry');
 const config = require('../config');
 
@@ -79,6 +80,28 @@ function gpsConfidence(c) {
   return 'red';
 }
 
+// Phase 5: map a capture's calibration source to its accuracy tier.
+//   S = on-device depth / LiDAR (3D points already in metres)
+//   A = AR plane raycast        (3D points already in metres)
+//   B = auto-detected reference object (ML)
+//   C = explicitly placed marker (QR) or manually drawn rectangle
+// The tier determines which engineering contract /measure enforces.
+function calibrationTier(c) {
+  if (!c) return null;
+  const method = c.calibrationMethod;
+  // 3D scale sources stamp these methods on the capture at upload time.
+  if (method === 'depth' || method === 'lidar') return 'S';
+  if (method === 'ar-plane' || method === 'arkit' || method === 'arcore') return 'A';
+  if (method === 'auto-ref' || method === 'ml-reference') return 'B';
+  // Manual rectangle and QR are both Tier C — physically placed / drawn,
+  // sub-mm corner accuracy when done correctly.
+  if (method === 'qr-auto' || method === 'qr' || method === 'rect') return 'C';
+  // Legacy line-scale (no homography) — treat as Tier C with caveats.
+  if (Array.isArray(c.homography) && c.homography.length === 9) return 'C';
+  if (c.pxPerCm) return 'C';
+  return null;
+}
+
 function captureToJson(c) {
   if (!c) return null;
   let calibration = null;
@@ -140,6 +163,14 @@ function captureToJson(c) {
     createdAt: c.createdAt,
     calibration,
     lens,
+    // Phase 5: client capability snapshot recorded at upload time.
+    client: (c.clientTier || c.clientPlatform || c.clientDeviceModel)
+      ? {
+          tier: c.clientTier ?? null,
+          platform: c.clientPlatform ?? null,
+          deviceModel: c.clientDeviceModel ?? null,
+        }
+      : null,
     imageUrl: `/api/v1/captures/${c.id}/image`,
   };
 }
@@ -243,6 +274,15 @@ router.post('/captures', upload.single('image'), async (req, res, next) => {
       gpsFixCount: gpsFixCountStored,
       gpsTimestamp: gpsTimestampStored,
       deviceInfo: req.body.deviceInfo ? String(req.body.deviceInfo) : null,
+      // Phase 5: client-side capability declaration. The mobile app probes
+      // its own AR / depth support at launch and tells us which tier it
+      // can deliver. This does NOT decide tier on its own — server still
+      // derives the actual tier from the calibration source — but it lets
+      // us record device fleet capability for analytics + degrade safely
+      // when we have no scale source at all.
+      clientTier: req.body.clientTier ? String(req.body.clientTier).slice(0, 2) : null,
+      clientPlatform: req.body.clientPlatform ? String(req.body.clientPlatform).slice(0, 16) : null,
+      clientDeviceModel: req.body.clientDeviceModel ? String(req.body.clientDeviceModel).slice(0, 64) : null,
       takenAt,
       // Lens / camera profile
       intrinsics,
@@ -697,6 +737,10 @@ router.post('/captures/:id/measure', (req, res) => {
   let confidence = 'green';
   if (gpsConf === 'amber' || lensRisk === 'amber') confidence = 'amber';
 
+  // Phase 5: identify the scale source tier and look up its accuracy contract.
+  const tier = calibrationTier(c);
+  const contract = tier ? tierContract(tier) : null;
+
   // ----- Persist -----
   const id = newId();
   // Strip the (potentially large) intermediate polygonCm out of the persisted
@@ -731,6 +775,8 @@ router.post('/captures/:id/measure', (req, res) => {
       polygon,
       ...result,
       gates,
+      tier,
+      tierContract: contract,
       validation: {
         firstFailure: null,
         mc: {
