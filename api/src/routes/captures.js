@@ -9,6 +9,7 @@ const db = require('../db');
 const { upload, newId } = require('../middleware/upload');
 const { readImageMetadata, deleteIfExists } = require('../services/image');
 const { detectCalibrationMarker } = require('../services/marker');
+const { detectReferences } = require('../services/referenceDetector');
 const {
   intrinsicsFromExif, lensRiskFromFov, undistortPoints, undistortPoint,
   ZERO_DISTORTION,
@@ -114,6 +115,10 @@ function captureToJson(c) {
       heightCm: c.calibrationHeightCm ?? null,
       markerSidePx: c.markerSidePx ?? null,
       markerPayload: c.markerPayload ?? null,
+      // Phase 7: when calibration came from auto-detected reference object.
+      referenceId: c.referenceId ?? null,
+      referenceConfidence: c.referenceConfidence ?? null,
+      referenceDetector: c.referenceDetector ?? null,
     };
   } else if (c.pxPerCm) {
     calibration = {
@@ -345,6 +350,69 @@ router.post('/captures', upload.single('image'), async (req, res, next) => {
       }
     }
 
+    // ----- Tier B fallback: auto-detect a reference object -------------
+    // If the QR detector did NOT find a marker, try to find a paper sheet
+    // (A4 / Letter) or another known reference in the photo. This lets the
+    // user measure without printing or placing anything special — a credit
+    // card or a sheet of A4 next to the target is enough.
+    let autoRefInfo = null;
+    if (!markerInfo.found) {
+      try {
+        const det = await detectReferences(filePath);
+        autoRefInfo = det;
+        if (det.found) {
+          const m = det.match;
+          // Orient corners: catalog gives widthMm × heightMm in canonical
+          // landscape orientation, but our detected `corners.tl→tr` may be
+          // either short or long side. Use observed side lengths to decide.
+          const sideTopPx = Math.hypot(
+            m.corners.tr.x - m.corners.tl.x,
+            m.corners.tr.y - m.corners.tl.y
+          );
+          const sideLeftPx = Math.hypot(
+            m.corners.bl.x - m.corners.tl.x,
+            m.corners.bl.y - m.corners.tl.y
+          );
+          const longMm = Math.max(m.widthMm, m.heightMm);
+          const shortMm = Math.min(m.widthMm, m.heightMm);
+          const widthCm  = (sideTopPx >= sideLeftPx ? longMm : shortMm) / 10;
+          const heightCm = (sideTopPx >= sideLeftPx ? shortMm : longMm) / 10;
+          try {
+            const cornersUndist = intrinsics
+              ? {
+                  tl: undistortPoint(m.corners.tl, intrinsics, distortion),
+                  tr: undistortPoint(m.corners.tr, intrinsics, distortion),
+                  br: undistortPoint(m.corners.br, intrinsics, distortion),
+                  bl: undistortPoint(m.corners.bl, intrinsics, distortion),
+                }
+              : m.corners;
+            const H = geometry.homographyFromRectangle({
+              tl: cornersUndist.tl,
+              tr: cornersUndist.tr,
+              br: cornersUndist.br,
+              bl: cornersUndist.bl,
+              widthCm, heightCm,
+            });
+            baseRow.homography = H;
+            baseRow.calibrationCorners = m.corners;
+            baseRow.calibrationCornersUndistorted = cornersUndist;
+            baseRow.calibrationWidthCm = widthCm;
+            baseRow.calibrationHeightCm = heightCm;
+            baseRow.calibrationMethod = 'auto-ref';
+            baseRow.referenceId = m.referenceId;
+            baseRow.referenceConfidence = m.confidence;
+            baseRow.referenceDetector = m.detectorVersion;
+          } catch (_) {
+            // Degenerate corners — keep det info for diagnostics but do
+            // not commit a bad homography.
+            autoRefInfo = { ...det, found: false, reason: 'homography_failed' };
+          }
+        }
+      } catch (e) {
+        autoRefInfo = { found: false, reason: 'detector_error', error: e.message };
+      }
+    }
+
     const stored = db.captures.insert(baseRow);
 
     res.status(201).json({
@@ -358,6 +426,20 @@ router.post('/captures', upload.single('image'), async (req, res, next) => {
             payload: markerInfo.payload,
           }
         : { found: false, reason: markerInfo.reason },
+      autoReference: autoRefInfo && autoRefInfo.found
+        ? {
+            found: true,
+            referenceId: autoRefInfo.match.referenceId,
+            label: autoRefInfo.match.label,
+            confidence: autoRefInfo.match.confidence,
+            corners: autoRefInfo.match.corners,
+            widthMm: autoRefInfo.match.widthMm,
+            heightMm: autoRefInfo.match.heightMm,
+            detector: autoRefInfo.match.detectorVersion,
+          }
+        : autoRefInfo
+          ? { found: false, reason: autoRefInfo.reason || 'no_match' }
+          : { found: false, reason: 'not_attempted' },
     });
   } catch (err) {
     deleteIfExists(filePath);
