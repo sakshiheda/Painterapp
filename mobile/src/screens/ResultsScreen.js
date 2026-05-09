@@ -5,14 +5,44 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResultsScreen({ route, navigation }) {
-  const { measurement, capture } = route.params;
-  const { area, perimeter, sides, location, pointCount } = measurement;
+  const { measurement, capture, points } = route.params;
+  const { area, perimeter, sides, location, pointCount, calibrated } = measurement;
+  // The API returns calibrated=true with cm/ft/m; calibrated=false ships only px / px².
+  const isCalibrated = calibrated !== false && area && area.cm2 != null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Stat label="Area" big={`${area.cm2.toLocaleString()} cm²`} sub={`${area.ft2} ft²  •  ${area.m2} m²`} accent />
-        <Stat label="Perimeter" big={`${perimeter.cm} cm`} sub={`${perimeter.ft} ft  •  ${perimeter.m} m`} />
+        {!isCalibrated && (
+          <View style={styles.warnCard}>
+            <Text style={styles.warnTitle}>Pixel-only preview</Text>
+            <Text style={styles.warnBody}>
+              This photo wasn't calibrated, so results are in image pixels — not real-world units.
+              Tap “Calibrate this photo” below: pick a reference (credit card, A4, coin…)
+              and your polygon will be re-measured in cm/m/ft — no need to redraw.
+            </Text>
+            <TouchableOpacity
+              style={styles.calibBtn}
+              onPress={() => navigation.replace('Calibrate', {
+                capture,
+                pendingPolygon: Array.isArray(points) ? points : undefined,
+              })}>
+              <Text style={styles.calibBtnText}>Calibrate this photo</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {isCalibrated ? (
+          <>
+            <Stat label="Area" big={`${area.cm2.toLocaleString()} cm²`} sub={`${area.ft2} ft²  •  ${area.m2} m²`} accent />
+            <Stat label="Perimeter" big={`${perimeter.cm} cm`} sub={`${perimeter.ft} ft  •  ${perimeter.m} m`} />
+          </>
+        ) : (
+          <>
+            <Stat label="Area" big={`${area.px2.toLocaleString()} px²`} sub="uncalibrated" accent />
+            <Stat label="Perimeter" big={`${perimeter.px} px`} sub="uncalibrated" />
+          </>
+        )}
 
         <View style={styles.gpsCard}>
           <Text style={styles.gpsTitle}>Captured at</Text>
@@ -36,8 +66,14 @@ export default function ResultsScreen({ route, navigation }) {
           <View key={s.index} style={styles.sideRow}>
             <Text style={styles.sideIdx}>#{s.index + 1}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sideMain}>{s.lengthCm} cm</Text>
-              <Text style={styles.sideSub}>{s.lengthFt} ft  •  {s.lengthM} m</Text>
+              {isCalibrated ? (
+                <>
+                  <Text style={styles.sideMain}>{s.lengthCm} cm</Text>
+                  <Text style={styles.sideSub}>{s.lengthFt} ft  •  {s.lengthM} m</Text>
+                </>
+              ) : (
+                <Text style={styles.sideMain}>{s.lengthPx} px</Text>
+              )}
             </View>
           </View>
         ))}
@@ -121,4 +157,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   btnGhostText: { color: '#0f172a', fontWeight: '700' },
+  warnCard: {
+    backgroundColor: '#fef9c3',
+    borderColor: '#facc15',
+    borderWidth: 1,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  warnTitle: { fontWeight: '800', color: '#854d0e', fontSize: 13, letterSpacing: 0.5, textTransform: 'uppercase' },
+  warnBody: { color: '#713f12', fontSize: 13, marginTop: 4, lineHeight: 18 },
+  calibBtn: {
+    marginTop: 10,
+    backgroundColor: '#0f172a',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  calibBtnText: { color: '#facc15', fontWeight: '800', fontSize: 14 },
 });

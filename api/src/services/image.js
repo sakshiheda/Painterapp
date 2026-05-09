@@ -6,8 +6,9 @@ const sharp = require('sharp');
 const exifr = require('exifr');
 
 /**
- * Read GPS + dimensions from an uploaded image file.
- * Returns { width, height, latitude, longitude, altitude, takenAt }.
+ * Read GPS + dimensions + lens metadata from an uploaded image file.
+ * Returns { width, height, latitude, longitude, altitude, takenAt,
+ *           focalLengthMm, focalLengthIn35mmFilm, make, model, lensModel }.
  * Any field that cannot be read is returned as null/undefined.
  */
 async function readImageMetadata(filePath) {
@@ -19,12 +20,24 @@ async function readImageMetadata(filePath) {
     longitude: null,
     altitude: null,
     takenAt: null,
+    // Lens / camera intrinsics inputs (used for undistortion in Phase 2.5)
+    focalLengthMm: null,
+    focalLengthIn35mmFilm: null,
+    make: null,
+    model: null,
+    lensModel: null,
   };
 
   try {
     const exif = await exifr.parse(filePath, {
       gps: true,
-      pick: ['GPSLatitude', 'GPSLongitude', 'GPSAltitude', 'DateTimeOriginal', 'CreateDate', 'latitude', 'longitude'],
+      pick: [
+        'GPSLatitude', 'GPSLongitude', 'GPSAltitude',
+        'DateTimeOriginal', 'CreateDate',
+        'latitude', 'longitude',
+        'FocalLength', 'FocalLengthIn35mmFilm', 'FocalLengthIn35mmFormat',
+        'Make', 'Model', 'LensModel',
+      ],
     });
     if (exif) {
       // exifr normalises GPS to .latitude / .longitude when gps:true
@@ -35,6 +48,13 @@ async function readImageMetadata(filePath) {
       if (ts instanceof Date && !Number.isNaN(ts.getTime())) {
         result.takenAt = ts.toISOString();
       }
+      if (typeof exif.FocalLength === 'number') result.focalLengthMm = exif.FocalLength;
+      // Different EXIF writers use different tag names for the 35mm-equivalent
+      const f35 = exif.FocalLengthIn35mmFilm ?? exif.FocalLengthIn35mmFormat;
+      if (typeof f35 === 'number') result.focalLengthIn35mmFilm = f35;
+      if (typeof exif.Make === 'string') result.make = exif.Make.slice(0, 64);
+      if (typeof exif.Model === 'string') result.model = exif.Model.slice(0, 64);
+      if (typeof exif.LensModel === 'string') result.lensModel = exif.LensModel.slice(0, 128);
     }
   } catch (_) {
     // EXIF is optional — silently ignore

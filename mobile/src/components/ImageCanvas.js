@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Image, StyleSheet, Pressable } from 'react-native';
+import { View, Image, StyleSheet, Pressable, Text } from 'react-native';
 import Svg, { Circle, Line, Polygon } from 'react-native-svg';
 import { imageToViewCoords } from '../utils/coords';
 
@@ -10,8 +10,8 @@ import { imageToViewCoords } from '../utils/coords';
  *
  * Props:
  *   capture          — { width, height, ... } (image dimensions in px)
- *   imageUrl         — full URL of the photo
- *   apiKey           — passed as a header so authenticated images load
+ *   imageUrl         — full URL of the photo (key passed as ?key= query)
+ *   apiKey           — used to build the authenticated image URL
  *   onTap(point)     — called with { x, y } in image px
  *   markers          — array of { x, y, color?, label? } in image px
  *   lines            — array of { from, to, color? } in image px
@@ -21,6 +21,17 @@ export default function ImageCanvas({
   capture, imageUrl, apiKey, onTap, markers = [], lines = [], polygon = [],
 }) {
   const [view, setView] = useState(null);
+  const [imgError, setImgError] = useState(null);
+
+  // Defensive: parent screens occasionally hand us partial params during a
+  // navigation transition — never let a missing URL crash the render tree.
+  const safeImageUrl = typeof imageUrl === 'string' ? imageUrl : '';
+  // React Native's <Image> on Android cannot reliably attach custom headers,
+  // so the API also accepts the key as ?key=... — we use that here.
+  const sep = safeImageUrl.includes('?') ? '&' : '?';
+  const authedUrl = apiKey && safeImageUrl
+    ? `${safeImageUrl}${sep}key=${encodeURIComponent(apiKey)}`
+    : safeImageUrl;
 
   function handlePress(e) {
     if (!view) return;
@@ -45,11 +56,21 @@ export default function ImageCanvas({
       onLayout={(e) => setView({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
       <Pressable style={StyleSheet.absoluteFill} onPress={handlePress}>
         <Image
-          source={{ uri: imageUrl, headers: { 'x-api-key': apiKey } }}
+          source={{ uri: authedUrl }}
           style={StyleSheet.absoluteFill}
           resizeMode="contain"
+          onError={(e) => setImgError(e?.nativeEvent?.error || 'Image load failed')}
+          onLoad={() => setImgError(null)}
         />
       </Pressable>
+
+      {imgError && (
+        <View style={styles.errorOverlay} pointerEvents="none">
+          <Text style={styles.errorTitle}>Image failed to load</Text>
+          <Text style={styles.errorBody}>{imgError}</Text>
+          <Text style={styles.errorUrl}>{authedUrl}</Text>
+        </View>
+      )}
 
       {view && (
         <Svg width={view.width} height={view.height} style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -90,4 +111,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  errorOverlay: {
+    position: 'absolute',
+    left: 16, right: 16, top: 16,
+    backgroundColor: 'rgba(220,38,38,0.92)',
+    padding: 12,
+    borderRadius: 10,
+  },
+  errorTitle: { color: '#fff', fontWeight: '800', fontSize: 13, marginBottom: 4 },
+  errorBody: { color: '#fee2e2', fontSize: 12, marginBottom: 4 },
+  errorUrl: { color: '#fff', fontSize: 11, fontFamily: 'monospace' },
 });

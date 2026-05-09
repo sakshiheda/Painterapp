@@ -32,6 +32,17 @@ services:
         value: /app/uploads
       - key: DATA_DIR
         value: /app/data
+      # ---- measurement gates (Phase 1 + Phase 3) ----
+      - key: PAINTERAPP_GPS_MAX_ACCURACY_M
+        value: "15"
+      - key: PAINTERAPP_GPS_STRICT
+        value: "true"
+      - key: PAINTERAPP_POLYGON_ASPECT_MAX
+        value: "200"
+      - key: PAINTERAPP_POLYGON_MC_SAMPLES
+        value: "5000"
+      - key: PAINTERAPP_POLYGON_MC_TOLERANCE
+        value: "0.01"
     disk:
       name: painterapp-data
       mountPath: /app

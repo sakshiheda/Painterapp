@@ -9,9 +9,11 @@ import ImageCanvas from '../components/ImageCanvas';
 import { viewToImageCoords } from '../utils/coords';
 
 export default function PolygonScreen({ route, navigation }) {
-  const { capture } = route.params;
+  const { capture, initialPoints } = route.params;
   const { settings } = useSettings();
-  const [points, setPoints] = useState([]);
+  // Seed from initialPoints when returning from Calibrate so the user
+  // doesn't have to redraw their polygon after setting the scale.
+  const [points, setPoints] = useState(Array.isArray(initialPoints) ? initialPoints : []);
   const [busy, setBusy] = useState(false);
 
   const imageUrl = `${settings.apiBaseUrl.replace(/\/+$/, '')}${capture.imageUrl}`;
@@ -40,7 +42,9 @@ export default function PolygonScreen({ route, navigation }) {
     try {
       const client = createApiClient(settings);
       const res = await client.measure(capture.id, points);
-      navigation.replace('Results', { capture, measurement: res.measurement });
+      // Pass the polygon points along so Results can offer a "Calibrate this
+      // photo" button that returns here without losing the user's drawing.
+      navigation.replace('Results', { capture, measurement: res.measurement, points });
     } catch (e) {
       Alert.alert('Measurement failed', e.message);
     } finally {

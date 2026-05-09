@@ -25,5 +25,9 @@ web-build/
 # Runtime data — never commit user uploads or DB
 api/uploads/
 api/data/
+uploads/
+mobile/data/
+server-stdout.log
+server-stderr.log
 *.sqlite
 *.sqlite-journal

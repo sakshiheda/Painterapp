@@ -21,6 +21,12 @@ primary_region = "iad"
   MAX_UPLOAD_MB = "15"
   UPLOAD_DIR = "/app/uploads"
   DATA_DIR = "/app/data"
+  # ---- measurement gates (Phase 1 + Phase 3) ----
+  PAINTERAPP_GPS_MAX_ACCURACY_M = "15"
+  PAINTERAPP_GPS_STRICT = "true"
+  PAINTERAPP_POLYGON_ASPECT_MAX = "200"
+  PAINTERAPP_POLYGON_MC_SAMPLES = "5000"
+  PAINTERAPP_POLYGON_MC_TOLERANCE = "0.01"
 
 [[mounts]]
   source = "painterapp_data"

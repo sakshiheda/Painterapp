@@ -1,0 +1,12 @@
+# Local-only artifacts. Note: Dockerfile and fly.toml MUST be tracked
+# (Render / Fly use them on deploy). The Azure-deploy zip script that
+# previously asked for them to be ignored is no longer in use.
+node_modules/
+data/
+uploads/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+

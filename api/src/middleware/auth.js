@@ -14,6 +14,11 @@ function apiKeyAuth(req, res, next) {
     const m = auth.match(/^Bearer\s+(.+)$/i);
     if (m) key = m[1];
   }
+  // Some clients (notably React Native's <Image>) cannot reliably attach
+  // custom headers — allow the key as a query string for GET image URLs.
+  if (!key && req.query && typeof req.query.key === 'string') {
+    key = req.query.key;
+  }
   if (!key || !config.apiKeys.includes(key)) {
     return res.status(401).json({ error: 'unauthorized', message: 'Missing or invalid API key' });
   }

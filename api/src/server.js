@@ -11,6 +11,7 @@ const db = require('./db');
 const { apiKeyAuth } = require('./middleware/auth');
 const { notFound, errorHandler } = require('./middleware/errors');
 const capturesRouter = require('./routes/captures');
+const markerRouter = require('./routes/marker');
 
 function buildApp() {
   db.init(config.dataDir);
@@ -54,6 +55,7 @@ function buildApp() {
 
   app.use('/api', limiter, apiKeyAuth);
   app.use('/api/v1', capturesRouter);
+  app.use('/api/v1', markerRouter);
 
   app.use(notFound);
   app.use(errorHandler);
@@ -63,9 +65,13 @@ function buildApp() {
 
 if (require.main === module) {
   const app = buildApp();
-  const server = app.listen(config.port, () => {
+  // Bind to 0.0.0.0 (all IPv4 interfaces) — explicit dual-stack so the
+  // server is reachable from other hosts on the LAN, not just IPv6
+  // loopback. Override with PAINTERAPP_HOST if you need to scope it.
+  const host = process.env.PAINTERAPP_HOST || '0.0.0.0';
+  const server = app.listen(config.port, host, () => {
     // eslint-disable-next-line no-console
-    console.log(`[painterapp-api] listening on http://localhost:${config.port} (${config.env})`);
+    console.log(`[painterapp-api] listening on http://${host}:${config.port} (${config.env})`);
   });
 
   const shutdown = (signal) => {

@@ -1,4 +1,164 @@
 {
-  "captures": {},
-  "measurements": {}
+  "captures": {
+    "dERA7zKJGMT8HJ": {
+      "id": "dERA7zKJGMT8HJ",
+      "filename": "1778295696339-CxcH71qYsa6qd1.jpg",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 846929,
+      "width": 2048,
+      "height": 2730,
+      "latitude": 26.8015377,
+      "longitude": 75.8352084,
+      "altitude": 333.4000244140625,
+      "gpsSource": "client",
+      "deviceInfo": "android 31",
+      "takenAt": "2026-05-09T03:01:35.498Z",
+      "createdAt": "2026-05-09T03:01:36.610Z"
+    },
+    "QN5YutxE6EFkhc": {
+      "id": "QN5YutxE6EFkhc",
+      "filename": "1778295782632-S19415mucunvTE.jpg",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 352898,
+      "width": 2048,
+      "height": 2730,
+      "latitude": 26.8016259,
+      "longitude": 75.8352786,
+      "altitude": 333.4000244140625,
+      "gpsSource": "client",
+      "deviceInfo": "android 31",
+      "takenAt": "2026-05-09T03:03:01.813Z",
+      "createdAt": "2026-05-09T03:03:02.772Z"
+    },
+    "fSiVExzsqEVdfJ": {
+      "id": "fSiVExzsqEVdfJ",
+      "filename": "1778295863624-Zxa854isJM3tM7.jpg",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 673091,
+      "width": 2048,
+      "height": 2730,
+      "latitude": 26.8016417,
+      "longitude": 75.8352501,
+      "altitude": 334.70001220703125,
+      "gpsSource": "client",
+      "deviceInfo": "android 31",
+      "takenAt": "2026-05-09T03:04:22.711Z",
+      "createdAt": "2026-05-09T03:04:23.928Z"
+    },
+    "TajDiPgi8Rqv7S": {
+      "id": "TajDiPgi8Rqv7S",
+      "filename": "1778295967388-1Qn6biJ3p41wz2.jpg",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 535603,
+      "width": 2048,
+      "height": 2730,
+      "latitude": 26.8016541,
+      "longitude": 75.8353202,
+      "altitude": 332.8000183105469,
+      "gpsSource": "client",
+      "deviceInfo": "android 31",
+      "takenAt": "2026-05-09T03:06:06.468Z",
+      "createdAt": "2026-05-09T03:06:08.586Z"
+    },
+    "pcg59JcuQMaTHu": {
+      "id": "pcg59JcuQMaTHu",
+      "filename": "1778296213615-kTpHNegieaQsJH.jpg",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 520664,
+      "width": 2048,
+      "height": 2730,
+      "latitude": 26.8015741,
+      "longitude": 75.8352782,
+      "altitude": 334.70001220703125,
+      "gpsSource": "client",
+      "deviceInfo": "android 31",
+      "takenAt": "2026-05-09T03:10:12.742Z",
+      "createdAt": "2026-05-09T03:10:13.889Z"
+    }
+  },
+  "measurements": {
+    "DVaCGEz637FTCV": {
+      "id": "DVaCGEz637FTCV",
+      "captureId": "QN5YutxE6EFkhc",
+      "polygon": [
+        {
+          "x": 1026.8418258704112,
+          "y": 1122.4995680667644
+        },
+        {
+          "x": 505.8427769239095,
+          "y": 1401.1360829417492
+        },
+        {
+          "x": 979.478247030998,
+          "y": 2153.644157338548
+        },
+        {
+          "x": 903.6965686309934,
+          "y": 2172.599105656923
+        }
+      ],
+      "result": {
+        "pointCount": 4,
+        "calibrated": false,
+        "perimeter": {
+          "px": 2615.4
+        },
+        "area": {
+          "px2": 223392.02
+        },
+        "sides": [
+          {
+            "index": 0,
+            "from": {
+              "x": 1026.8418258704112,
+              "y": 1122.4995680667644
+            },
+            "to": {
+              "x": 505.8427769239095,
+              "y": 1401.1360829417492
+            },
+            "lengthPx": 590.83
+          },
+          {
+            "index": 1,
+            "from": {
+              "x": 505.8427769239095,
+              "y": 1401.1360829417492
+            },
+            "to": {
+              "x": 979.478247030998,
+              "y": 2153.644157338548
+            },
+            "lengthPx": 889.16
+          },
+          {
+            "index": 2,
+            "from": {
+              "x": 979.478247030998,
+              "y": 2153.644157338548
+            },
+            "to": {
+              "x": 903.6965686309934,
+              "y": 2172.599105656923
+            },
+            "lengthPx": 78.12
+          },
+          {
+            "index": 3,
+            "from": {
+              "x": 903.6965686309934,
+              "y": 2172.599105656923
+            },
+            "to": {
+              "x": 1026.8418258704112,
+              "y": 1122.4995680667644
+            },
+            "lengthPx": 1057.3
+          }
+        ]
+      },
+      "createdAt": "2026-05-09T03:03:28.734Z"
+    }
+  }
 }

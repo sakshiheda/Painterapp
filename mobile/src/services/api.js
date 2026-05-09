@@ -39,7 +39,20 @@ export function createApiClient({ apiBaseUrl, apiKey }) {
     return body;
   }
 
-  async function uploadCapture({ photoUri, latitude, longitude, altitude, takenAt, deviceInfo }) {
+  async function uploadCapture({
+    photoUri,
+    latitude,
+    longitude,
+    altitude,
+    accuracyM,
+    altitudeAccuracyM,
+    mocked,
+    gpsTimestamp,
+    gpsProvider,
+    gpsFixCount,
+    takenAt,
+    deviceInfo,
+  }) {
     const form = new FormData();
     // React Native FormData file shape
     const filename = photoUri.split('/').pop() || `photo-${Date.now()}.jpg`;
@@ -53,6 +66,12 @@ export function createApiClient({ apiBaseUrl, apiKey }) {
     if (latitude != null) form.append('latitude', String(latitude));
     if (longitude != null) form.append('longitude', String(longitude));
     if (altitude != null) form.append('altitude', String(altitude));
+    if (accuracyM != null) form.append('accuracyM', String(accuracyM));
+    if (altitudeAccuracyM != null) form.append('altitudeAccuracyM', String(altitudeAccuracyM));
+    if (mocked != null) form.append('mocked', mocked ? 'true' : 'false');
+    if (gpsTimestamp) form.append('gpsTimestamp', String(gpsTimestamp));
+    if (gpsProvider) form.append('gpsProvider', String(gpsProvider));
+    if (gpsFixCount != null) form.append('gpsFixCount', String(gpsFixCount));
     if (takenAt) form.append('takenAt', takenAt);
     if (deviceInfo) form.append('deviceInfo', deviceInfo);
 
@@ -63,6 +82,26 @@ export function createApiClient({ apiBaseUrl, apiKey }) {
     return request(`/api/v1/captures/${captureId}/calibrate`, {
       method: 'POST',
       body: payload,
+    });
+  }
+
+  // Perspective-correct calibration. Payload:
+  //   { tl, tr, br, bl, widthCm, heightCm }
+  // where each corner is { x, y } in image-pixel coords.
+  function calibrateRect(captureId, payload) {
+    return request(`/api/v1/captures/${captureId}/calibrate-rect`, {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  // Re-run server-side QR auto-detection for a previously uploaded capture.
+  // Useful when the photo was taken before the user printed the marker, or
+  // when retrying with a clearer image.
+  function detectMarker(captureId) {
+    return request(`/api/v1/captures/${captureId}/detect-marker`, {
+      method: 'POST',
+      body: {},
     });
   }
 
@@ -77,5 +116,5 @@ export function createApiClient({ apiBaseUrl, apiKey }) {
     return request('/healthz', { method: 'GET' });
   }
 
-  return { request, uploadCapture, calibrate, measure, ping, baseUrl: base };
+  return { request, uploadCapture, calibrate, calibrateRect, detectMarker, measure, ping, baseUrl: base };
 }
